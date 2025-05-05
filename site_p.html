@@ -12,7 +12,8 @@
       max-width: 600px;
       margin: auto;
     }
-    input[type="file"] {
+    input[type="file"],
+    input[type="number"] {
       margin-bottom: 1em;
     }
     #quiz-container {
@@ -30,6 +31,19 @@
       cursor: pointer;
       border-radius: 5px;
     }
+    #progress {
+      font-weight: bold;
+      margin-bottom: 1em;
+    }
+    .review-item {
+      text-align: left;
+      margin-bottom: 1em;
+      border: 1px solid #ccc;
+      padding: 1em;
+      border-radius: 5px;
+    }
+    .correct { color: green; }
+    .incorrect { color: red; }
   </style>
 </head>
 <body>
@@ -37,9 +51,13 @@
   <h1>CSV Quiz Maker Web App</h1>
   <p>Upload a CSV file with a column for "Term" and "Definition".</p>
 
-  <input type="file" id="csv-file" accept=".csv" />
+  <input type="file" id="csv-file" accept=".csv" /><br>
+  <input type="number" id="question-count" placeholder="How many questions?" min="1" />
+  <button id="start-button">Start Quiz</button>
+  <button id="restart-button" style="display:none;">Restart Quiz</button>
 
   <div id="quiz-container">
+    <p id="progress"></p>
     <div id="question-box">
       <h2 id="question-text"></h2>
       <div id="options"></div>
@@ -48,9 +66,13 @@
     <button id="next-button" style="display:none;">Next</button>
   </div>
 
+  <div id="review-container" style="display:none;"></div>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
   <script>
+    let fullQuizData = [];
     let quizData = [];
+    let userAnswers = [];
     let currentQuestionIndex = 0;
     let score = 0;
 
@@ -64,40 +86,69 @@
         complete: function(results) {
           const rows = results.data;
 
-          quizData = rows.map(row => ({
+          fullQuizData = rows.map(row => ({
             term: row.Term.trim(),
             definition: row.Definition.trim()
           }));
 
-          if (quizData.length < 4) {
-            alert("Please upload a CSV with at least 4 term-definition pairs.");
-            return;
-          }
-
-          startQuiz();
+          alert("CSV loaded. Enter how many questions you'd like (or leave blank for all), then click 'Start Quiz'.");
         }
       });
+    });
+
+    document.getElementById("start-button").addEventListener("click", () => {
+      const input = document.getElementById("question-count").value.trim();
+
+      let num;
+      if (input === "") {
+        num = fullQuizData.length; // default to all questions
+      } else {
+        num = parseInt(input);
+        if (isNaN(num) || num <= 0 || !Number.isInteger(num)) {
+          alert("Please enter a valid whole number.");
+          return;
+        }
+
+        if (num > fullQuizData.length) {
+          alert("Number is too large. Max: " + fullQuizData.length);
+          return;
+        }
+      }
+
+      quizData = shuffleArray(fullQuizData).slice(0, num);
+      startQuiz();
+    });
+
+    document.getElementById("restart-button").addEventListener("click", () => {
+      if (confirm("Are you sure you want to restart the quiz?")) {
+        document.getElementById("review-container").style.display = "none";
+        document.getElementById("question-count").value = "";
+        quizData = [];
+        fullQuizData = [];
+        userAnswers = [];
+        score = 0;
+        currentQuestionIndex = 0;
+        document.getElementById("quiz-container").style.display = "none";
+        document.getElementById("restart-button").style.display = "none";
+        alert("Quiz reset. Reload CSV to begin again.");
+      }
     });
 
     function startQuiz() {
       currentQuestionIndex = 0;
       score = 0;
-
-      // ✅ Randomize the question order
-      quizData = shuffleArray(quizData);
+      userAnswers = [];
 
       document.getElementById("quiz-container").style.display = "block";
+      document.getElementById("restart-button").style.display = "inline";
+      document.getElementById("review-container").style.display = "none";
       showQuestion();
     }
 
     function showQuestion() {
       const question = quizData[currentQuestionIndex];
       const allDefinitions = quizData.map(item => item.definition);
-      const incorrect = allDefinitions
-        .filter(def => def !== question.definition)
-        .sort(() => 0.5 - Math.random())
-        .slice(0, 3);
-
+      const incorrect = allDefinitions.filter(def => def !== question.definition).sort(() => 0.5 - Math.random()).slice(0, 3);
       const options = [...incorrect, question.definition].sort(() => 0.5 - Math.random());
 
       document.getElementById("question-text").textContent = `What is the definition of "${question.term}"?`;
@@ -109,15 +160,16 @@
         const btn = document.createElement("button");
         btn.className = "option-button";
         btn.textContent = option;
-        btn.onclick = () => handleAnswer(option, question.definition);
+        btn.onclick = () => handleAnswer(option, question.definition, question.term);
         optionsDiv.appendChild(btn);
       });
 
       document.getElementById("feedback").textContent = "";
       document.getElementById("next-button").style.display = "none";
+      document.getElementById("progress").textContent = `Q${currentQuestionIndex + 1} / ${quizData.length}`;
     }
 
-    function handleAnswer(selected, correct) {
+    function handleAnswer(selected, correct, term) {
       const feedback = document.getElementById("feedback");
       if (selected === correct) {
         feedback.textContent = "✅ Correct!";
@@ -125,6 +177,8 @@
       } else {
         feedback.textContent = `❌ Incorrect. Correct answer: ${correct}`;
       }
+
+      userAnswers.push({ term, correct, selected });
 
       document.querySelectorAll(".option-button").forEach(btn => btn.disabled = true);
       document.getElementById("next-button").style.display = "inline";
@@ -140,14 +194,41 @@
     });
 
     function showResults() {
-      document.getElementById("question-box").innerHTML = `<h2>Quiz Complete!</h2><p>Your score: ${score} / ${quizData.length}</p>`;
-      document.getElementById("next-button").style.display = "none";
-      document.getElementById("feedback").textContent = "";
+      const percent = Math.round((score / quizData.length) * 100);
+      const reviewDiv = document.getElementById("review-container");
+      reviewDiv.innerHTML = `<h2>Quiz Complete!</h2><p>Your score: ${score} / ${quizData.length} (${percent}%)</p>`;
+
+      userAnswers.forEach(({ term, correct, selected }) => {
+        const div = document.createElement("div");
+        div.className = "review-item";
+        div.innerHTML = `
+          <strong>Term:</strong> ${term}<br>
+          <strong>Your Answer:</strong> <span class="${selected === correct ? 'correct' : 'incorrect'}">${selected}</span><br>
+          <strong>Correct Answer:</strong> ${correct}
+        `;
+        reviewDiv.appendChild(div);
+      });
+
+      const missed = userAnswers.filter(a => a.selected !== a.correct);
+      if (missed.length > 0) {
+        const retryBtn = document.createElement("button");
+        retryBtn.textContent = "Retake Missed Questions";
+        retryBtn.onclick = () => {
+          quizData = missed.map(m => ({
+            term: m.term,
+            definition: m.correct
+          }));
+          startQuiz();
+        };
+        reviewDiv.appendChild(retryBtn);
+      }
+
+      reviewDiv.style.display = "block";
+      document.getElementById("quiz-container").style.display = "none";
     }
 
-    // ✅ Utility function to shuffle arrays
     function shuffleArray(array) {
-      return array.sort(() => 0.5 - Math.random());
+      return array.slice().sort(() => 0.5 - Math.random());
     }
   </script>
 
