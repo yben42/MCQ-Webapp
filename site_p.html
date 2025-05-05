@@ -82,6 +82,10 @@
     function startQuiz() {
       currentQuestionIndex = 0;
       score = 0;
+
+      // ✅ Randomize the question order
+      quizData = shuffleArray(quizData);
+
       document.getElementById("quiz-container").style.display = "block";
       showQuestion();
     }
@@ -139,6 +143,11 @@
       document.getElementById("question-box").innerHTML = `<h2>Quiz Complete!</h2><p>Your score: ${score} / ${quizData.length}</p>`;
       document.getElementById("next-button").style.display = "none";
       document.getElementById("feedback").textContent = "";
+    }
+
+    // ✅ Utility function to shuffle arrays
+    function shuffleArray(array) {
+      return array.sort(() => 0.5 - Math.random());
     }
   </script>
 
