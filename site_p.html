@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>CSV Quiz Maker Web App</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 2em;
+      text-align: center;
+      max-width: 600px;
+      margin: auto;
+    }
+    input[type="file"] {
+      margin-bottom: 1em;
+    }
+    #quiz-container {
+      display: none;
+      margin-top: 2em;
+    }
+    .option-button {
+      display: block;
+      margin: 0.5em auto;
+      padding: 0.7em;
+      width: 100%;
+      max-width: 300px;
+      background-color: #f0f0f0;
+      border: 1px solid #ccc;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>CSV Quiz Maker Web App</h1>
+  <p>Upload a CSV file with a column for "Term" and "Definition".</p>
+
+  <input type="file" id="csv-file" accept=".csv" />
+
+  <div id="quiz-container">
+    <div id="question-box">
+      <h2 id="question-text"></h2>
+      <div id="options"></div>
+    </div>
+    <p id="feedback"></p>
+    <button id="next-button" style="display:none;">Next</button>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script>
+    let quizData = [];
+    let currentQuestionIndex = 0;
+    let score = 0;
+
+    document.getElementById("csv-file").addEventListener("change", function(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: function(results) {
+          const rows = results.data;
+
+          quizData = rows.map(row => ({
+            term: row.Term.trim(),
+            definition: row.Definition.trim()
+          }));
+
+          if (quizData.length < 4) {
+            alert("Please upload a CSV with at least 4 term-definition pairs.");
+            return;
+          }
+
+          startQuiz();
+        }
+      });
+    });
+
+    function startQuiz() {
+      currentQuestionIndex = 0;
+      score = 0;
+      document.getElementById("quiz-container").style.display = "block";
+      showQuestion();
+    }
+
+    function showQuestion() {
+      const question = quizData[currentQuestionIndex];
+      const allDefinitions = quizData.map(item => item.definition);
+      const incorrect = allDefinitions
+        .filter(def => def !== question.definition)
+        .sort(() => 0.5 - Math.random())
+        .slice(0, 3);
+
+      const options = [...incorrect, question.definition].sort(() => 0.5 - Math.random());
+
+      document.getElementById("question-text").textContent = `What is the definition of "${question.term}"?`;
+
+      const optionsDiv = document.getElementById("options");
+      optionsDiv.innerHTML = "";
+
+      options.forEach(option => {
+        const btn = document.createElement("button");
+        btn.className = "option-button";
+        btn.textContent = option;
+        btn.onclick = () => handleAnswer(option, question.definition);
+        optionsDiv.appendChild(btn);
+      });
+
+      document.getElementById("feedback").textContent = "";
+      document.getElementById("next-button").style.display = "none";
+    }
+
+    function handleAnswer(selected, correct) {
+      const feedback = document.getElementById("feedback");
+      if (selected === correct) {
+        feedback.textContent = "✅ Correct!";
+        score++;
+      } else {
+        feedback.textContent = `❌ Incorrect. Correct answer: ${correct}`;
+      }
+
+      document.querySelectorAll(".option-button").forEach(btn => btn.disabled = true);
+      document.getElementById("next-button").style.display = "inline";
+    }
+
+    document.getElementById("next-button").addEventListener("click", () => {
+      currentQuestionIndex++;
+      if (currentQuestionIndex < quizData.length) {
+        showQuestion();
+      } else {
+        showResults();
+      }
+    });
+
+    function showResults() {
+      document.getElementById("question-box").innerHTML = `<h2>Quiz Complete!</h2><p>Your score: ${score} / ${quizData.length}</p>`;
+      document.getElementById("next-button").style.display = "none";
+      document.getElementById("feedback").textContent = "";
+    }
+  </script>
+
+</body>
+</html>
