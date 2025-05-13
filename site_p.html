@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>CSV Quiz Maker Web App</title>
+  <title>QM B3</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body {
@@ -12,8 +12,7 @@
       max-width: 600px;
       margin: auto;
     }
-    input[type="file"],
-    input[type="number"] {
+    input[type="file"], input[type="number"], label {
       margin-bottom: 1em;
     }
     #quiz-container {
@@ -31,6 +30,14 @@
       cursor: pointer;
       border-radius: 5px;
     }
+    .option-button.correct {
+      background-color: #d4edda;
+      border-color: #c3e6cb;
+    }
+    .option-button.incorrect {
+      background-color: #f8d7da;
+      border-color: #f5c6cb;
+    }
     #progress {
       font-weight: bold;
       margin-bottom: 1em;
@@ -44,155 +51,222 @@
     }
     .correct { color: green; }
     .incorrect { color: red; }
+    #timer {
+      font-size: 1.2em;
+      font-weight: bold;
+      margin: 1em 0;
+    }
   </style>
 </head>
 <body>
 
-  <h1>CSV Quiz Maker Web App</h1>
+  <h1>QM B3</h1>
   <p>Upload a CSV file with a column for "Term" and "Definition".</p>
 
-  <input type="file" id="csv-file" accept=".csv" /><br>
-  <input type="number" id="question-count" placeholder="How many questions?" min="1" />
+  <input type="file" id="csv-file" accept=".csv"><br>
+  <input type="number" id="question-count" placeholder="How many questions?" min="1"><br>
+
+  <label><input type="checkbox" id="second-chance-mode"> Second Chance Mode</label><br>
+  <label><input type="checkbox" id="flip-mode"> Flip Mode (Definition to Term)</label><br>
+  <label><input type="checkbox" id="timed-mode"> Timed Mode</label><br>
+
+  <div id="timer-settings" style="display:none;">
+    <input type="number" id="hours" placeholder="HH" min="0" style="width: 60px;">
+    <input type="number" id="minutes" placeholder="MM" min="0" style="width: 60px;">
+    <input type="number" id="seconds" placeholder="SS" min="0" style="width: 60px;">
+  </div>
+
   <button id="start-button">Start Quiz</button>
   <button id="restart-button" style="display:none;">Restart Quiz</button>
 
   <div id="quiz-container">
     <p id="progress"></p>
+    <div id="timer"></div>
     <div id="question-box">
       <h2 id="question-text"></h2>
       <div id="options"></div>
     </div>
     <p id="feedback"></p>
+    <button id="reveal-button" style="display:none;">Reveal Answers</button>
+    <button id="back-button" style="display:none;">Back</button>
     <button id="next-button" style="display:none;">Next</button>
   </div>
 
   <div id="review-container" style="display:none;"></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
   <script>
-    let fullQuizData = [];
-    let quizData = [];
-    let userAnswers = [];
-    let currentQuestionIndex = 0;
-    let score = 0;
+    // is all vars i use
+    let fullQuizData = [], quizData = [], userAnswers = [];
+    let currentQuestionIndex = 0, score = 0;
+    let secondChanceMode = false, flipMode = false, timerEnabled = false;
+    let currentQuestionAnswered = false, timerInterval;
 
+    // when they upload file
     document.getElementById("csv-file").addEventListener("change", function(event) {
       const file = event.target.files[0];
       if (!file) return;
-
       Papa.parse(file, {
         header: true,
         skipEmptyLines: true,
         complete: function(results) {
-          const rows = results.data;
-
-          fullQuizData = rows.map(row => ({
+          fullQuizData = results.data.map(row => ({
             term: row.Term.trim(),
             definition: row.Definition.trim()
           }));
-
-          alert("CSV loaded. Enter how many questions you'd like (or leave blank for all), then click 'Start Quiz'.");
+          alert("CSV loaded. Enter settings then start quiz.");
         }
       });
     });
 
+    // toggle timer input
+    document.getElementById("timed-mode").addEventListener("change", () => {
+      document.getElementById("timer-settings").style.display = document.getElementById("timed-mode").checked ? "block" : "none";
+    });
+
+    // when they hit start
     document.getElementById("start-button").addEventListener("click", () => {
       const input = document.getElementById("question-count").value.trim();
+      secondChanceMode = document.getElementById("second-chance-mode").checked;
+      flipMode = document.getElementById("flip-mode").checked;
+      timerEnabled = document.getElementById("timed-mode").checked;
 
-      let num;
-      if (input === "") {
-        num = fullQuizData.length; // default to all questions
-      } else {
-        num = parseInt(input);
-        if (isNaN(num) || num <= 0 || !Number.isInteger(num)) {
-          alert("Please enter a valid whole number.");
-          return;
-        }
-
-        if (num > fullQuizData.length) {
-          alert("Number is too large. Max: " + fullQuizData.length);
-          return;
-        }
+      let num = input === "" ? fullQuizData.length : parseInt(input);
+      if (isNaN(num) || num <= 0 || !Number.isInteger(num) || num > fullQuizData.length) {
+        alert("bad number"); return;
       }
 
-      quizData = shuffleArray(fullQuizData).slice(0, num);
+      quizData = _.shuffle(fullQuizData).slice(0, num);
+      if (timerEnabled) startTimer();
       startQuiz();
     });
 
+    // is timer stuff
+    function startTimer() {
+      let h = parseInt(document.getElementById("hours").value) || 0;
+      let m = parseInt(document.getElementById("minutes").value) || 0;
+      let s = parseInt(document.getElementById("seconds").value) || 0;
+      let total = h * 3600 + m * 60 + s;
+      const timerEl = document.getElementById("timer");
+      if (total <= 0) return;
+      timerInterval = setInterval(() => {
+        total--;
+        let hrs = Math.floor(total / 3600),
+            mins = Math.floor((total % 3600) / 60),
+            secs = total % 60;
+        timerEl.textContent = `Time Left: ${hrs}:${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+        if (total <= 0) {
+          clearInterval(timerInterval);
+          showResults();
+        }
+      }, 1000);
+    }
+
+    // reset button
     document.getElementById("restart-button").addEventListener("click", () => {
-      if (confirm("Are you sure you want to restart the quiz?")) {
-        document.getElementById("review-container").style.display = "none";
-        document.getElementById("question-count").value = "";
-        quizData = [];
-        fullQuizData = [];
-        userAnswers = [];
-        score = 0;
-        currentQuestionIndex = 0;
-        document.getElementById("quiz-container").style.display = "none";
-        document.getElementById("restart-button").style.display = "none";
-        alert("Quiz reset. Reload CSV to begin again.");
-      }
+      if (confirm("restart?")) window.location.reload();
     });
 
+    // start quiz
     function startQuiz() {
       currentQuestionIndex = 0;
       score = 0;
       userAnswers = [];
-
       document.getElementById("quiz-container").style.display = "block";
       document.getElementById("restart-button").style.display = "inline";
       document.getElementById("review-container").style.display = "none";
       showQuestion();
     }
 
+    // show question
     function showQuestion() {
-      const question = quizData[currentQuestionIndex];
-      const allDefinitions = quizData.map(item => item.definition);
-      const incorrect = allDefinitions.filter(def => def !== question.definition).sort(() => 0.5 - Math.random()).slice(0, 3);
-      const options = [...incorrect, question.definition].sort(() => 0.5 - Math.random());
+      currentQuestionAnswered = false;
+      const q = quizData[currentQuestionIndex];
+      const prompt = flipMode ? q.definition : q.term;
+      const correct = flipMode ? q.term : q.definition;
+      const wrongs = _.shuffle(quizData.map(i => flipMode ? i.term : i.definition).filter(a => a !== correct)).slice(0,3);
+      const options = _.shuffle([...wrongs, correct]);
 
-      document.getElementById("question-text").textContent = `What is the definition of "${question.term}"?`;
+      document.getElementById("question-text").textContent = flipMode ? `What is the term for this definition? "${prompt}"` : `What is the definition of "${prompt}"?`;
 
       const optionsDiv = document.getElementById("options");
       optionsDiv.innerHTML = "";
-
       options.forEach(option => {
         const btn = document.createElement("button");
         btn.className = "option-button";
         btn.textContent = option;
-        btn.onclick = () => handleAnswer(option, question.definition, question.term);
+        btn.onclick = () => handleAnswer(option, correct, q.term, btn);
         optionsDiv.appendChild(btn);
       });
 
       document.getElementById("feedback").textContent = "";
       document.getElementById("next-button").style.display = "none";
+      document.getElementById("back-button").style.display = currentQuestionIndex > 0 ? "inline" : "none";
+      document.getElementById("reveal-button").style.display = "none";
       document.getElementById("progress").textContent = `Q${currentQuestionIndex + 1} / ${quizData.length}`;
     }
 
-    function handleAnswer(selected, correct, term) {
-      const feedback = document.getElementById("feedback");
+    // handle answer
+    function handleAnswer(selected, correct, term, button) {
+      if (currentQuestionAnswered && !secondChanceMode) return;
+      const buttons = document.querySelectorAll(".option-button");
       if (selected === correct) {
-        feedback.textContent = "✅ Correct!";
-        score++;
+        button.classList.add("correct");
+        document.getElementById("feedback").textContent = "✅ Correct!";
+        if (!currentQuestionAnswered) score++;
+        userAnswers[currentQuestionIndex] = { term, correct, selected };
+        currentQuestionAnswered = true;
+        buttons.forEach(btn => btn.disabled = true);
+        document.getElementById("next-button").style.display = "inline";
+        document.getElementById("reveal-button").style.display = "inline";
       } else {
-        feedback.textContent = `❌ Incorrect. Correct answer: ${correct}`;
+        button.classList.add("incorrect");
+        if (!secondChanceMode) {
+          document.getElementById("feedback").textContent = `❌ Incorrect. Correct answer: ${correct}`;
+          buttons.forEach(btn => btn.disabled = true);
+          userAnswers[currentQuestionIndex] = { term, correct, selected };
+          document.getElementById("next-button").style.display = "inline";
+          document.getElementById("reveal-button").style.display = "inline";
+          currentQuestionAnswered = true;
+        } else {
+          document.getElementById("feedback").textContent = "❌ Try again.";
+          button.disabled = true;
+        }
       }
-
-      userAnswers.push({ term, correct, selected });
-
-      document.querySelectorAll(".option-button").forEach(btn => btn.disabled = true);
-      document.getElementById("next-button").style.display = "inline";
     }
 
+    // back button
+    document.getElementById("back-button").addEventListener("click", () => {
+      if (currentQuestionIndex > 0) {
+        currentQuestionIndex--;
+        showQuestion();
+      }
+    });
+
+    // reveal button
+    document.getElementById("reveal-button").addEventListener("click", () => {
+      const allBtns = document.querySelectorAll(".option-button");
+      allBtns.forEach(btn => {
+        const text = btn.textContent;
+        const source = quizData.find(i => i.term === text || i.definition === text);
+        if (source) btn.textContent += ` \u2192 ${flipMode ? source.definition : source.term}`;
+      });
+      document.getElementById("reveal-button").style.display = "none";
+    });
+
+    // next button
     document.getElementById("next-button").addEventListener("click", () => {
       currentQuestionIndex++;
       if (currentQuestionIndex < quizData.length) {
         showQuestion();
       } else {
+        if (timerInterval) clearInterval(timerInterval);
         showResults();
       }
     });
 
+    // show results
     function showResults() {
       const percent = Math.round((score / quizData.length) * 100);
       const reviewDiv = document.getElementById("review-container");
@@ -226,11 +300,6 @@
       reviewDiv.style.display = "block";
       document.getElementById("quiz-container").style.display = "none";
     }
-
-    function shuffleArray(array) {
-      return array.slice().sort(() => 0.5 - Math.random());
-    }
   </script>
-
 </body>
 </html>
