@@ -6,7 +6,7 @@ A web-based tool that allows users to upload a CSV file and instantly generate a
 
 ## 🌐 Live Demo
 
-[[https://yben42.github.io/site_p.html](https://yben42.github.io/site_p.html)](https://yben42.github.io/MCQ-Webapp/site_p.html)
+(https://yben42.github.io/MCQ-Webapp/site_p.html)](https://yben42.github.io/MCQ-Webapp/site_p.html)
 
 ---
 
