@@ -4,13 +4,13 @@ A web-based tool that allows users to upload a CSV file and instantly generate a
 
 ---
 
-## 🌐 Live Demo
+## Live Demo
 
 [(https://yben42.github.io/MCQ-Webapp/site_p.html)]
 
 ---
 
-## 📘 Description
+## Description
 
 This project was born out of a personal need when popular learning platforms like Quizlet began charging for the ability to create tests from flashcard sets. This tool was built to provide a free and straightforward alternative for students, educators, and lifelong learners.
 
@@ -18,7 +18,7 @@ By formatting your questions and answers in a simple CSV (Comma-Separated Values
 
 ---
 
-## ✨ Features
+## Features
 
 - **Free to Use**: A no-cost solution for creating quizzes.
 - **File Upload**: Easily upload your quiz data using the browser's file picker.
@@ -29,7 +29,7 @@ By formatting your questions and answers in a simple CSV (Comma-Separated Values
 
 ---
 
-## 🛠️ How to Use
+## How to Use
 
 1. **Create your CSV file**  
    The file must have a column for each *definition* and *term*. The columns should be structured in that specific order.
@@ -46,7 +46,7 @@ By formatting your questions and answers in a simple CSV (Comma-Separated Values
 
 ---
 
-## 🔧 Technologies Used
+## Technologies Used
 
 - **HTML5**: For the basic structure and content of the web page.
 - **CSS3**: For styling the user interface.
