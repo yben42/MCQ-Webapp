@@ -51,3 +51,7 @@ By formatting your questions and answers in a simple CSV (Comma-Separated Values
 - **HTML5**: For the basic structure and content of the web page.
 - **CSS3**: For styling the user interface.
 - **JavaScript**: For all the core functionality, including reading the CSV file, generating the quiz questions, and calculating the score.
+
+---
+
+© 2024 Benjamin Yiu. This project is shared for educational and portfolio purposes.
